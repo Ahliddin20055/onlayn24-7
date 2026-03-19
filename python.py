@@ -24,7 +24,7 @@ def run_flask():
 api_id = int(os.environ.get("API_ID", 0))
 api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
-ismingiz = "."
+ismingiz = "Safarov Ahliddin"
 
 logging.basicConfig(level=logging.INFO)
 
