@@ -64,7 +64,7 @@ async def main():
                 about=f"🕒 Vaqt: {vaqt} | 📅 {sana} | {kun} | ⚡"
             ))
             
-            await asyncio.sleep(15)
+            await asyncio.sleep(40)
             
         except Exception as e:
             logging.error(f"Xatolik yuz berdi: {e}")
