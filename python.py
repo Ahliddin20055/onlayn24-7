@@ -1,13 +1,13 @@
 import os
-from telethon import TelegramClient, functions
 import asyncio
 import logging
 from datetime import datetime
 import pytz
 from flask import Flask
 from threading import Thread
+from telethon import TelegramClient, functions
 
-# --- Render uchun kichik HTTP Server (UptimeRobot uchun) ---
+# --- Render uchun kichik HTTP Server ---
 app = Flask('')
 
 @app.route('/')
@@ -15,35 +15,29 @@ def home():
     return "Bot ishlamoqda!"
 
 def run_flask():
-    app.run(host='0.0.0.0', port=8080)
+    # Render portni avtomatik beradi, 8080 default
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run_flask)
     t.start()
 
-# --- KONFIGURATSIYA (Render/Environment Variables orqali) ---
-# Bularni kodga yozmang, Render saytida 'Environment Variables' bo'limiga kiriting
-api_id = int(os.environ.get("API_ID", 12345)) 
-api_hash = os.environ.get("API_HASH", "Sizning_Hash_Bu_Yerda")
-session_string = os.environ.get("SESSION_STRING") # String session xavfsizroq
-
+# --- KONFIGURATSIYA ---
+api_id = int(os.environ.get("API_ID", 0))
+api_hash = os.environ.get("API_HASH", "")
 ismingiz = "."
 
 logging.basicConfig(level=logging.INFO)
 
-# Agar session_string bo'lsa shundan, yo'q bo'lsa fayldan foydalanadi
-if session_string:
-    from telethon.sessions import StringSession
-    client = TelegramClient(StringSession(session_string), api_id, api_hash)
-else:
-    client = TelegramClient('online_session', api_id, api_hash)
+# Clientni global yaratamiz, lekin loopni main ichida ishlatamiz
+client = TelegramClient('online_session', api_id, api_hash)
 
 async def main():
     print("🚀 Bot ishga tushmoqda...")
     await client.start()
     print("✅ Tizimga muvaffaqiyatli kirildi!")
     
-    # Render o'chib qolmasligi uchun serverni yoqamiz
     keep_alive()
 
     while True:
@@ -62,7 +56,6 @@ async def main():
                 about=yangi_bio
             ))
 
-            # Telegram limitlari uchun 60 soniya tavsiya etiladi (xavfsizroq)
             await asyncio.sleep(60)
 
         except Exception as e:
@@ -70,7 +63,10 @@ async def main():
             await asyncio.sleep(20)
 
 if __name__ == '__main__':
+    # Xatolikni to'g'irlaydigan yangi ishga tushirish usuli
     try:
-        client.loop.run_until_complete(main())
-    except KeyboardInterrupt:
-        print("🔴 Bot to'xtatildi.")
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
+    except Exception as e:
+        # Agar yuqoridagi ishlamasa, yangi loop yaratamiz
+        asyncio.run(main())
