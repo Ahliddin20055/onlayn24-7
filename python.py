@@ -13,22 +13,31 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot ishlanyapti!"
+    return "✅ Bot muvaffaqiyatli ishlamoqda!"
 
 def run_flask():
-    port = int(os.environ.get("PORT", 8080))
+    # Render uchun 10000 porti ma'qulroq
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
 # --- KONFIGURATSIYA ---
-# Bularni Render Environment Variables bo'limiga kiritishingiz shart!
 api_id = int(os.environ.get("API_ID", 0))
 api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
 ismingiz = "Safarov Ahliddin"
 
-logging.basicConfig(level=logging.INFO)
+# Hafta kunlarini o'zbekchaga o'giramiz
+hafta_kunlari = {
+    "Monday": "Dushanba",
+    "Tuesday": "Seshanba",
+    "Wednesday": "Chorshanba",
+    "Thursday": "Payshanba",
+    "Friday": "Juma",
+    "Saturday": "Shanba",
+    "Sunday": "Yakshanba"
+}
 
-# StringSession orqali client yaratish
+logging.basicConfig(level=logging.INFO)
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
 
 async def main():
@@ -36,25 +45,31 @@ async def main():
     await client.start()
     print("✅ Tizimga muvaffaqiyatli kirildi!")
     
-    # Render o'chib qolmasligi uchun Flaskni ishga tushiramiz
-    Thread(target=run_flask).start()
+    # Flaskni alohida thread-da ishga tushirish
+    Thread(target=run_flask, daemon=True).start()
 
     while True:
         try:
             uzb_iz = pytz.timezone('Asia/Tashkent')
-            hozirgi_vaqt = datetime.now(uzb_iz).strftime("%H:%M")
+            now = datetime.now(uzb_iz)
+            
+            # Formatlash: 16:45, 19.03.2026, Payshanba
+            hozirgi_vaqt = now.strftime("%H:%M")
+            sana = now.strftime("%d.%m.%Y")
+            hafta_kuni = hafta_kunlari[now.strftime("%A")]
             
             # Onlayn holatni yangilash
             await client(functions.account.UpdateStatusRequest(offline=False))
             
-            # Profilni yangilash (Qavslar to'g'irlandi)
+            # Profilni yangilash: Ism | Vaqt, About: Sana va Hafta kuni
             await client(functions.account.UpdateProfileRequest(
-                first_name=ismingiz,
+                first_name=f"{ismingiz}",
                 last_name=f"| {hozirgi_vaqt} 🕒",
-                about=f"🕒 Soat: {hozirgi_vaqt} | ⚡"
+                about=f"📅 {sana} | {hafta_kuni} | ⚡ @Ahliddin_Safarov"
             ))
             
-            await asyncio.sleep(15)
+            # Telegram Flood limit (blok) olmaslik uchun 45-60 soniya tavsiya etiladi
+            await asyncio.sleep(45)
             
         except Exception as e:
             logging.error(f"Xatolik yuz berdi: {e}")
