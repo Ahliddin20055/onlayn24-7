@@ -1,3 +1,5 @@
+aiogram
 telethon
-pytz
 flask
+pytz
+python-dotenv
