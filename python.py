@@ -5,7 +5,7 @@ from datetime import datetime
 import pytz
 from flask import Flask
 from threading import Thread
-from telethon import TelegramClient, functions
+from telethon import TelegramClient, functions, events
 from telethon.sessions import StringSession
 
 # --- Render uchun HTTP Server ---
@@ -25,6 +25,9 @@ api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
 ismingiz = "Safarov Ahliddin"
 
+# Tasdiqlanganlar ro'yxati (Bot o'chib yonsa ham xotirada qoladi)
+allowed_users = set()
+
 # Hafta kunlari lug'ati
 hafta_kunlari = {
     "Monday": "Dushanba", "Tuesday": "Seshanba", "Wednesday": "Chorshanba",
@@ -36,42 +39,94 @@ logging.basicConfig(level=logging.INFO)
 # StringSession orqali client yaratish
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
 
+# --- 1. SOAT VA PROFIL YANGILASH (Asl kod o'zgartirilmadi) ---
+async def clock_worker():
+    while True:
+        try:
+            uzb_iz = pytz.timezone('Asia/Tashkent')
+            now = datetime.now(uzb_iz)
+            vaqt = now.strftime("%H:%M")
+            sana = now.strftime("%d.%m.%Y")
+            kun = hafta_kunlari.get(now.strftime("%A"), "")
+            
+            await client(functions.account.UpdateStatusRequest(offline=False))
+            await client(functions.account.UpdateProfileRequest(
+                first_name=ismingiz,
+                last_name=f"| {vaqt} 🕒",
+                about=f"🕒 {vaqt} | 📅 {sana} | {kun} | 🛡️ PM Guard Active"
+            ))
+            await asyncio.sleep(40)
+        except Exception as e:
+            logging.error(f"Profil yangilashda xato: {e}")
+            await asyncio.sleep(20)
+
+# --- 2. AQLLI PM GUARD (Tasdiqlanmaganlarni bloklash) ---
+@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
+async def pm_guard(event):
+    sender = await event.get_sender()
+    
+    # O'zingiz yoki botlar yozsa e'tiborsiz qoldiradi
+    if not sender or sender.bot or sender.self:
+        return
+
+    # Agar foydalanuvchi tasdiqlanmagan bo'lsa
+    if sender.id not in allowed_users:
+        try:
+            # Ogohlantirish xabarini yuborish
+            await event.reply(f"⚠️ **DIQQAT! SIZ TASDIQLANMAGANSIZ!**\n\n"
+                              f"Assalomu alaykum, {sender.first_name}. "
+                              f"Xavfsizlik yuzasidan xabar yozish imkoniyatingiz cheklandi. "
+                              f"{ismingiz} sizni tasdiqlamagunlaricha blokda qolasiz. "
+                              f"\n\n🕒 Iltimos, kuting...")
+            
+            # Sizga (Saqlangan xabarlar) ID yuborish
+            await client.send_message('me', f"👤 **Yangi cheklangan foydalanuvchi:**\n"
+                                            f"Ism: {sender.first_name}\n"
+                                            f"User: @{sender.username}\n"
+                                            f"ID: `{sender.id}`\n\n"
+                                            f"Tasdiqlash: `.ok {sender.id}`")
+
+            # UNI BLOKLASH (Xabar yozish joyi yopiladi)
+            await client(functions.contacts.BlockRequest(id=sender.id))
+            
+        except Exception as e:
+            logging.error(f"Himoya tizimi xatosi: {e}")
+
+# --- 3. TASDIQLASH VA OCHISH BUYRUG'I ---
+@client.on(events.NewMessage(outgoing=True, pattern=r'\.ok (\d+)'))
+async def allow_user(event):
+    user_id = int(event.pattern_match.group(1))
+    
+    try:
+        # Blokdan chiqarish
+        await client(functions.contacts.UnblockRequest(id=user_id))
+        allowed_users.add(user_id)
+        
+        # Unga lichkasiga xabar yuborish
+        await client.send_message(user_id, "✅ **Siz tasdiqlandingiz!**\nEndi menga bemalol xabar yuborishingiz mumkin.")
+        
+        await event.edit(f"✅ ID: {user_id} blokdan ochildi va tasdiqlandi!")
+    except Exception as e:
+        await event.edit(f"❌ Xatolik: {e}")
+
 async def main():
     print("🚀 Bot ishga tushmoqda...")
     await client.start()
     print("✅ Tizimga muvaffaqiyatli kirildi!")
     
-    # Render o'chib qolmasligi uchun Flaskni ishga tushiramiz
-    Thread(target=run_flask).start()
+    # Render serverini ishga tushirish
+    Thread(target=run_flask, daemon=True).start()
 
-    while True:
-        try:
-            uzb_iz = pytz.timezone('Asia/Tashkent')
-            now = datetime.now(uzb_iz)
-            
-            # Ma'lumotlarni olish
-            vaqt = now.strftime("%H:%M")
-            sana = now.strftime("%d.%m.%Y")
-            kun = hafta_kunlari.get(now.strftime("%A"), "")
-            
-            # Onlayn holatni yangilash
-            await client(functions.account.UpdateStatusRequest(offline=False))
-            
-            # Profilni yangilash (Ismda ham, Bioda ham vaqt bo'ladi)
-            await client(functions.account.UpdateProfileRequest(
-                first_name=ismingiz,
-                last_name=f"| {vaqt} 🕒",
-                about=f"🕒 Vaqt: {vaqt} | 📅 {sana} | {kun} | ⚡"
-            ))
-            
-            await asyncio.sleep(40)
-            
-        except Exception as e:
-            logging.error(f"Xatolik yuz berdi: {e}")
-            await asyncio.sleep(20)
+    # Soatni fon rejimida ishga tushirish
+    asyncio.create_task(clock_worker())
+    
+    # Botni xabarlarni tinglash rejimida ushlab turish
+    await client.run_until_disconnected()
 
 if __name__ == '__main__':
     try:
-        asyncio.run(main())
+        # Yangi asyncio ishga tushirish mantiqi
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(main())
     except KeyboardInterrupt:
         print("🔴 Bot to'xtatildi.")
