@@ -25,7 +25,7 @@ api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
 ismingiz = "Safarov Ahliddin"
 
-# Tasdiqlanganlar ro'yxati (Bot o'chib yonsa ham xotirada qoladi)
+# Tasdiqlanganlar ro'yxati
 allowed_users = set()
 
 # Hafta kunlari lug'ati
@@ -39,7 +39,7 @@ logging.basicConfig(level=logging.INFO)
 # StringSession orqali client yaratish
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
 
-# --- 1. SOAT VA PROFIL YANGILASH (Asl kod o'zgartirilmadi) ---
+# --- 1. SOAT VA PROFIL YANGILASH ---
 async def clock_worker():
     while True:
         try:
@@ -60,33 +60,28 @@ async def clock_worker():
             logging.error(f"Profil yangilashda xato: {e}")
             await asyncio.sleep(20)
 
-# --- 2. AQLLI PM GUARD (Tasdiqlanmaganlarni bloklash) ---
+# --- 2. AQLLI PM GUARD ---
 @client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def pm_guard(event):
     sender = await event.get_sender()
     
-    # O'zingiz yoki botlar yozsa e'tiborsiz qoldiradi
     if not sender or sender.bot or sender.self:
         return
 
-    # Agar foydalanuvchi tasdiqlanmagan bo'lsa
     if sender.id not in allowed_users:
         try:
-            # Ogohlantirish xabarini yuborish
             await event.reply(f"⚠️ **DIQQAT! SIZ TASDIQLANMAGANSIZ!**\n\n"
                               f"Assalomu alaykum, {sender.first_name}. "
                               f"Xavfsizlik yuzasidan xabar yozish imkoniyatingiz cheklandi. "
                               f"{ismingiz} sizni tasdiqlamagunlaricha blokda qolasiz. "
                               f"\n\n🕒 Iltimos, kuting...")
             
-            # Sizga (Saqlangan xabarlar) ID yuborish
             await client.send_message('me', f"👤 **Yangi cheklangan foydalanuvchi:**\n"
                                             f"Ism: {sender.first_name}\n"
                                             f"User: @{sender.username}\n"
                                             f"ID: `{sender.id}`\n\n"
                                             f"Tasdiqlash: `.ok {sender.id}`")
 
-            # UNI BLOKLASH (Xabar yozish joyi yopiladi)
             await client(functions.contacts.BlockRequest(id=sender.id))
             
         except Exception as e:
@@ -98,35 +93,32 @@ async def allow_user(event):
     user_id = int(event.pattern_match.group(1))
     
     try:
-        # Blokdan chiqarish
         await client(functions.contacts.UnblockRequest(id=user_id))
         allowed_users.add(user_id)
         
-        # Unga lichkasiga xabar yuborish
         await client.send_message(user_id, "✅ **Siz tasdiqlandingiz!**\nEndi menga bemalol xabar yuborishingiz mumkin.")
-        
         await event.edit(f"✅ ID: {user_id} blokdan ochildi va tasdiqlandi!")
     except Exception as e:
         await event.edit(f"❌ Xatolik: {e}")
 
-async def main():
+# --- 4. ASOSIY ISHGA TUSHIRISH QISMI (XATOLIK TUZATILDI) ---
+async def start_bot():
     print("🚀 Bot ishga tushmoqda...")
     await client.start()
     print("✅ Tizimga muvaffaqiyatli kirildi!")
     
-    # Render serverini ishga tushirish
+    # Flaskni parallel ishga tushirish
     Thread(target=run_flask, daemon=True).start()
 
-    # Soatni fon rejimida ishga tushirish
+    # Soatni fonda ishga tushirish
     asyncio.create_task(clock_worker())
     
-    # Botni xabarlarni tinglash rejimida ushlab turish
+    # Botni o'chib qolmasligi uchun ushlab turish
     await client.run_until_disconnected()
 
 if __name__ == '__main__':
     try:
-        # Yangi asyncio ishga tushirish mantiqi
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
-    except KeyboardInterrupt:
+        # Eng xavfsiz ishga tushirish usuli
+        asyncio.run(start_bot())
+    except (KeyboardInterrupt, SystemExit):
         print("🔴 Bot to'xtatildi.")
