@@ -25,8 +25,8 @@ api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
 ismingiz = "Safarov Ahliddin"
 
-# Tasdiqlanganlar ro'yxati (Bot yonganda bo'sh bo'ladi)
-allowed_users = set()
+# Kimlarga ogohlantirish yuborilganini eslab qolish uchun (takrorlanmasligi uchun)
+greeted_users = set()
 
 # Hafta kunlari lug'ati
 hafta_kunlari = {
@@ -56,71 +56,56 @@ async def clock_worker():
             await client(functions.account.UpdateProfileRequest(
                 first_name=ismingiz,
                 last_name=f"| {vaqt} 🕒",
-                about=f"🕒 {vaqt} | 📅 {sana} | {kun} | 🛡️ PM Guard Active 🌐"
+                about=f"🕒 {vaqt} | 📅 {sana} | {kun} | 🟢 24/7 Online"
             ))
             await asyncio.sleep(40)
         except Exception as e:
             logging.error(f"Soatda xato: {e}")
             await asyncio.sleep(20)
 
-# --- 2. QAT'IY PM GUARD (HAMMANI BLOKLASH) ---
-# Bu yerda func=lambda e: e.is_private qo'shildi, faqat lichkani ushlash uchun
+# --- 2. AVTOMATIK TUSHUNTIRISH (BOT EFFEKTI) ---
 @client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
-async def pm_guard(event):
-    # Kim yozganini aniqlaymiz
+async def auto_greeting(event):
     sender = await event.get_sender()
     
     # O'zingiz yoki botlar bo'lsa, tegmaydi
     if not sender or sender.bot or sender.self:
         return
 
-    # Agar u hali tasdiqlanmagan bo'lsa (ro'yxatda yo'q bo'lsa)
-    if sender.id not in allowed_users:
+    # Agar bu odamga hali tushuntirish yuborilmagan bo'lsa
+    if sender.id not in greeted_users:
         try:
-            # 1. Xabarni darhol "O'qilgan" qilish
+            # Xabarni o'qildi qilish
             await client.send_read_acknowledge(event.chat_id)
 
-            # 2. Uni bloklash (Xabar yozish joyini yopish uchun birinchi bloklaymiz)
-            await client(functions.contacts.BlockRequest(id=sender.id))
+            # SIZ AYTGAN KENG TUSHUNTIRISH MATNI
+            intro_text = (
+                f"👋 **Assalomu alaykum, {sender.first_name}!**\n\n"
+                f"📢 **HURMATLI FOYDALANUVCHI!**\n\n"
+                f"Meni juda zarur ishingiz bo'lmasa, iltimos, bezovta qilmang. "
+                f"Vaqtim chegaralanganligi sababli barcha xabarlarga javob bera olmayman.\n\n"
+                f"💡 **Eslatma:**\n"
+                f"• Reklama yoki foydasiz suhbatlar uchun yozmang.\n"
+                f"• Muhim masala bo'lsa, qisqa va lo'nda tushuntiring.\n"
+                f"• Ismingiz va maqsadingizni aniq yozing.\n\n"
+                f"Sizning xabaringiz qabul qilindi, agar kerak bo'lsa {ismingiz} o'zi siz bilan bog'lanadi. Rahmat!"
+            )
 
-            # 3. Unga ogohlantirish yuborish (blokdan oldin yuborishga ulguradi)
-            await event.reply(f"⚠️ **DIQQAT! SIZ TASDIQLANMAGANSIZ!**\n\n"
-                              f"Assalomu alaykum, {sender.first_name}. "
-                              f"Siz {ismingiz} tomonidan tasdiqlanmagansiz. "
-                              f"Hozircha xabar yozish imkoniyatingiz cheklandi.\n\n"
-                              f"🕒 Iltimos, tasdiqlashlarini kuting...")
+            # Ogohlantirishni yuborish
+            await event.reply(intro_text)
             
-            # 4. Sizga "Saved Messages"ga bildirishnoma yuborish
-            await client.send_message('me', f"👤 **Yangi cheklangan foydalanuvchi:**\n"
-                                            f"Ism: {sender.first_name}\n"
-                                            f"ID: `{sender.id}`\n\n"
-                                            f"Ruxsat berish: `.ok {sender.id}`")
+            # Ro'yxatga qo'shish (bot o'chib-yonmaguncha qayta yubormaydi)
+            greeted_users.add(sender.id)
             
+            # O'zingizga bildirishnoma
+            await client.send_message('me', f"📩 **Yangi suhbatdosh:**\nIsm: {sender.first_name}\nID: `{sender.id}`")
+
         except Exception as e:
-            logging.error(f"Himoya xatosi: {e}")
+            logging.error(f"Greeting xatosi: {e}")
 
-# --- 3. TASDIQLASH VA BLOKDAN OCHISH ---
-@client.on(events.NewMessage(outgoing=True, pattern=r'\.ok (\d+)'))
-async def allow_user(event):
-    user_id = int(event.pattern_match.group(1))
-    
-    try:
-        # Blokdan chiqarish
-        await client(functions.contacts.UnblockRequest(id=user_id))
-        
-        # Ro'yxatga qo'shish
-        allowed_users.add(user_id)
-        
-        # O'sha odamga xabar yuborish
-        await client.send_message(user_id, "✅ **Siz tasdiqlandingiz!**\nEndi menga bemalol yozishingiz mumkin.")
-        
-        await event.edit(f"✅ ID: {user_id} blokdan chiqarildi va tasdiqlandi!")
-    except Exception as e:
-        await event.edit(f"❌ Xatolik: {e}")
-
-# --- 4. ISHGA TUSHIRISH ---
+# --- 3. ISHGA TUSHIRISH ---
 async def start_bot():
-    print("🚀 Bot 100% quvvat bilan ishga tushmoqda...")
+    print("🚀 Bot 24/7 va Auto-Intro bilan ishga tushmoqda...")
     await client.start()
     print("✅ Tizimga kirildi!")
     
@@ -130,13 +115,11 @@ async def start_bot():
     # Soatni fonda yoqish
     asyncio.create_task(clock_worker())
     
-    # Botni har doim onlayn va xabarda ushlash
+    # Botni doimiy eshitish rejimida ushlash
     await client.run_until_disconnected()
 
 if __name__ == '__main__':
     try:
-        # Xatolarni oldini oluvchi eng yangi ishga tushirish usuli
         asyncio.run(start_bot())
     except (KeyboardInterrupt, SystemExit):
         print("🔴 Bot to'xtatildi.")
-
