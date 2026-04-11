@@ -3,4 +3,3 @@ telethon
 flask
 pytz
 python-dotenv
-Pillow
