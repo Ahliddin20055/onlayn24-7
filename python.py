@@ -1,7 +1,6 @@
 import os
 import asyncio
 import logging
-import python_weather 
 from datetime import datetime
 import pytz
 from flask import Flask
@@ -11,6 +10,7 @@ from telethon.sessions import StringSession
 
 # --- Render uchun HTTP Server ---
 app = Flask('')
+
 @app.route('/')
 def home():
     return "Bot ishlanyapti!"
@@ -23,66 +23,57 @@ def run_flask():
 api_id = int(os.environ.get("API_ID", 0))
 api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
-ismingiz = "Safarov Ahliddin"
 
+# Hafta kunlari lug'ati
 hafta_kunlari = {
     "Monday": "Dushanba", "Tuesday": "Seshanba", "Wednesday": "Chorshanba",
     "Thursday": "Payshanba", "Friday": "Juma", "Saturday": "Shanba", "Sunday": "Yakshanba"
 }
 
 logging.basicConfig(level=logging.INFO)
+
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
 
-async def get_weather():
-    try:
-        async with python_weather.Client(unit=python_weather.METRIC) as weather_client:
-            weather = await weather_client.get('Tashkent') 
-            return f"{weather.temperature}°C"
-    except:
-        return "Noma'lum"
+async def update_status():
+    """Onlayn holatni har 15 soniyada yangilab turadi"""
+    while True:
+        try:
+            await client(functions.account.UpdateStatusRequest(offline=False))
+            await asyncio.sleep(15)
+        except Exception as e:
+            logging.error(f"Status yangilashda xatolik: {e}")
+            await asyncio.sleep(10)
+
+async def update_profile():
+    """Profil ismini va bio'ni har daqiqada yangilaydi"""
+    while True:
+        try:
+            uzb_iz = pytz.timezone('Asia/Tashkent')
+            now = datetime.now(uzb_iz)
+            vaqt = now.strftime("%H:%M")
+            sana = now.strftime("%d.%m.%Y")
+            kun = hafta_kunlari.get(now.strftime("%A"), "")
+            
+            await client(functions.account.UpdateProfileRequest(
+                first_name="Safarov Ahliddin",
+                last_name=f"| {vaqt} 🕒",
+                about=f"🕒 Vaqt: {vaqt} | 📅 {sana} | {kun} | 🟢"
+            ))
+            await asyncio.sleep(60)
+        except Exception as e:
+            logging.error(f"Profil yangilashda xatolik: {e}")
+            await asyncio.sleep(60)
 
 async def main():
     print("🚀 Bot ishga tushmoqda...")
     await client.start()
-    Thread(target=run_flask).start()
+    print("✅ Tizimga muvaffaqiyatli kirildi!")
     
-    # Taymerlar
-    status_timer = 0
-    profile_timer = 3600 # 1 soatlik interval
+    # Flask serverini fon rejimida ishga tushirish
+    Thread(target=run_flask).start()
 
-    while True:
-        try:
-            # 1. ONLAYN HOLAT (Har 5 soniyada "turtki" berish)
-            if status_timer >= 5:
-                # UpdateStatusRequest va GetFullUserRequest birgalikda sizni 
-                # Telegram serverida "faol foydalanuvchi" sifatida qayd etadi
-                await client(functions.account.UpdateStatusRequest(offline=False))
-                await client(functions.users.GetFullUserRequest('me'))
-                status_timer = 0
-            
-            # 2. PROFIL YANGILASH (Har 3600 soniyada - 1 soatda bir marta)
-            if profile_timer >= 3600:
-                uzb_iz = pytz.timezone('Asia/Tashkent')
-                now = datetime.now(uzb_iz)
-                vaqt = now.strftime("%H:%M")
-                sana = now.strftime("%d.%m.%Y")
-                kun = hafta_kunlari.get(now.strftime("%A"), "")
-                havo = await get_weather()
-                
-                await client(functions.account.UpdateProfileRequest(
-                    first_name=ismingiz,
-                    last_name=f"| {vaqt} 🕒",
-                    about=f"🌡 {havo} | 🕒 {vaqt} | 📅 {sana} | {kun} | 🟢"
-                ))
-                profile_timer = 0
-            
-            status_timer += 1
-            profile_timer += 1
-            await asyncio.sleep(1) # Asosiy 1 soniyalik sikl
-            
-        except Exception as e:
-            logging.error(f"Xatolik yuz berdi: {e}")
-            await asyncio.sleep(5)
+    # Ikkala vazifani parallel ravishda ishga tushirish
+    await asyncio.gather(update_status(), update_profile())
 
 if __name__ == '__main__':
     try:
