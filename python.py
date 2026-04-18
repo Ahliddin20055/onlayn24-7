@@ -52,12 +52,15 @@ async def main():
 
     while True:
         try:
-            # 1. ONLAYN HOLAT (Har 5 soniyada bir marta)
+            # 1. ONLAYN HOLAT (Har 5 soniyada "turtki" berish)
             if status_timer >= 5:
+                # UpdateStatusRequest va GetFullUserRequest birgalikda sizni 
+                # Telegram serverida "faol foydalanuvchi" sifatida qayd etadi
                 await client(functions.account.UpdateStatusRequest(offline=False))
+                await client(functions.users.GetFullUserRequest('me'))
                 status_timer = 0
             
-            # 2. PROFIL YANGILASH (Har 3600 soniyada bir marta)
+            # 2. PROFIL YANGILASH (Har 3600 soniyada - 1 soatda bir marta)
             if profile_timer >= 3600:
                 uzb_iz = pytz.timezone('Asia/Tashkent')
                 now = datetime.now(uzb_iz)
@@ -73,10 +76,9 @@ async def main():
                 ))
                 profile_timer = 0
             
-            # Har 1 soniyada tsikl ishlaydi, hisoblagichlar oshib boradi
             status_timer += 1
             profile_timer += 1
-            await asyncio.sleep(1) 
+            await asyncio.sleep(1) # Asosiy 1 soniyalik sikl
             
         except Exception as e:
             logging.error(f"Xatolik yuz berdi: {e}")
