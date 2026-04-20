@@ -39,7 +39,7 @@ async def update_status():
     while True:
         try:
             await client(functions.account.UpdateStatusRequest(offline=False))
-            await asyncio.sleep(15)
+            await asyncio.sleep(5)
         except Exception as e:
             logging.error(f"Status yangilashda xatolik: {e}")
             await asyncio.sleep(10)
