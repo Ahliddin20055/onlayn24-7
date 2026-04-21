@@ -29,7 +29,7 @@ name_1 = "Safarov Ahliddin" # 1-profil uchun ism
 api_id_2 = int(os.environ.get("API_ID_2", 0))
 api_hash_2 = os.environ.get("API_HASH_2", "")
 session_2 = os.environ.get("STRING_SESSION_2", "")
-name_2 = "🥰🥰" # 2-profil uchun ism
+name_2 = " ㅤㅤㅤㅤㅤ" # 2-profil uchun ism
 
 hafta_kunlari = {
     "Monday": "Dushanba", "Tuesday": "Seshanba", "Wednesday": "Chorshanba",
