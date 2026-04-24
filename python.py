@@ -10,27 +10,22 @@ from telethon.sessions import StringSession
 
 # --- Render uchun HTTP Server ---
 app = Flask('')
+
 @app.route('/')
 def home():
-    return "Botlar ishlayapti!"
+    return "Bot ishlanyapti!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
 # --- KONFIGURATSIYA ---
-# 1-akkaunt uchun
-api_id_1 = int(os.environ.get("API_ID_1", 0))
-api_hash_1 = os.environ.get("API_HASH_1", "")
-session_1 = os.environ.get("STRING_SESSION_1", "")
-name_1 = "Safarov Ahliddin" # 1-profil uchun ism
+api_id = int(os.environ.get("API_ID", 0))
+api_hash = os.environ.get("API_HASH", "")
+string_session = os.environ.get("STRING_SESSION", "")
+ismingiz = "Safarov Ahliddin"
 
-# 2-akkaunt uchun
-api_id_2 = int(os.environ.get("API_ID_2", 0))
-api_hash_2 = os.environ.get("API_HASH_2", "")
-session_2 = os.environ.get("STRING_SESSION_2", "")
-name_2 = " ㅤㅤㅤㅤㅤ" # 2-profil uchun ism
-
+# Hafta kunlari lug'ati
 hafta_kunlari = {
     "Monday": "Dushanba", "Tuesday": "Seshanba", "Wednesday": "Chorshanba",
     "Thursday": "Payshanba", "Friday": "Juma", "Saturday": "Shanba", "Sunday": "Yakshanba"
@@ -38,53 +33,45 @@ hafta_kunlari = {
 
 logging.basicConfig(level=logging.INFO)
 
-async def update_status(client):
-    while True:
-        try:
-            await client(functions.account.UpdateStatusRequest(offline=False))
-            await asyncio.sleep(5)
-        except Exception as e:
-            logging.error(f"Status xatolik: {e}")
-            await asyncio.sleep(10)
+# StringSession orqali client yaratish
+client = TelegramClient(StringSession(string_session), api_id, api_hash)
 
-async def update_profile(client, first_name):
+async def main():
+    print("🚀 Bot ishga tushmoqda...")
+    await client.start()
+    print("✅ Tizimga muvaffaqiyatli kirildi!")
+    
+    # Render o'chib qolmasligi uchun Flaskni ishga tushiramiz
+    Thread(target=run_flask).start()
+
     while True:
         try:
             uzb_iz = pytz.timezone('Asia/Tashkent')
             now = datetime.now(uzb_iz)
+            
+            # Ma'lumotlarni olish
             vaqt = now.strftime("%H:%M")
             sana = now.strftime("%d.%m.%Y")
             kun = hafta_kunlari.get(now.strftime("%A"), "")
             
+            # Onlayn holatni yangilash
+            await client(functions.account.UpdateStatusRequest(offline=False))
+            
+            # Profilni yangilash (Ismda ham, Bioda ham vaqt bo'ladi)
             await client(functions.account.UpdateProfileRequest(
-                first_name=first_name,
+                first_name=ismingiz,
                 last_name=f"| {vaqt} 🕒",
                 about=f"🕒 Vaqt: {vaqt} | 📅 {sana} | {kun} | 🟢"
             ))
-            await asyncio.sleep(60)
+            
+            await asyncio.sleep(40)
+            
         except Exception as e:
-            logging.error(f"Profil yangilash xatolik: {e}")
-            await asyncio.sleep(60)
-
-async def start_bot(api_id, api_hash, session, name):
-    client = TelegramClient(StringSession(session), api_id, api_hash)
-    await client.start()
-    print(f"✅ {name} tizimga kirdi!")
-    await asyncio.gather(update_status(client), update_profile(client, name))
-
-async def main():
-    print("🚀 Botlar ishga tushmoqda...")
-    Thread(target=run_flask).start()
-    
-    # Ikkala akkauntni parallel ishga tushiramiz
-    tasks = [
-        start_bot(api_id_1, api_hash_1, session_1, name_1),
-        start_bot(api_id_2, api_hash_2, session_2, name_2)
-    ]
-    await asyncio.gather(*tasks)
+            logging.error(f"Xatolik yuz berdi: {e}")
+            await asyncio.sleep(20)
 
 if __name__ == '__main__':
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("🔴 Botlar to'xtatildi.")
+        print("🔴 Bot to'xtatildi.")
