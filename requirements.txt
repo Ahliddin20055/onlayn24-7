@@ -1,6 +1,4 @@
-aiogram
 telethon
-flask
 pytz
-python-dotenv
-python-weather
+flask
+gunicorn
