@@ -25,7 +25,6 @@ api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
 ismingiz = "Safarov Ahliddin"
 
-# Hafta kunlari lug'ati
 hafta_kunlari = {
     "Monday": "Dushanba", "Tuesday": "Seshanba", "Wednesday": "Chorshanba",
     "Thursday": "Payshanba", "Friday": "Juma", "Saturday": "Shanba", "Sunday": "Yakshanba"
@@ -33,8 +32,47 @@ hafta_kunlari = {
 
 logging.basicConfig(level=logging.INFO)
 
-# StringSession orqali client yaratish
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
+
+# 1. DOIMIY ONLAYN USHLASH FUNKSIYASI
+async def keep_online():
+    while True:
+        try:
+            # Telegramga "men hozirgina ilovani ochdim" degan signal yuboradi
+            await client(functions.account.UpdateStatusRequest(offline=False))
+            # Server bilan aloqani faol ushlash uchun yengil ping
+            await client.get_me()
+            await asyncio.sleep(5)  # Har 5 soniyada onlaynlikni yangilash
+        except Exception as e:
+            logging.error(f"Onlaynlikda xatolik: {e}")
+            await asyncio.sleep(10)
+
+# 2. PROFIL VA VAQTNI YANGILASH FUNKSIYASI
+async def update_profile_loop():
+    oxirgi_daqiqa = ""
+    while True:
+        try:
+            uzb_iz = pytz.timezone('Asia/Tashkent')
+            now = datetime.now(uzb_iz)
+            joriy_daqiqa = now.strftime("%H:%M")
+
+            # Profilni har soniyada emas, faqat daqiqa almashganda yangilaymiz (FloodWait oldini olish uchun)
+            if joriy_daqiqa != oxirgi_daqiqa:
+                sana = now.strftime("%d.%m.%Y")
+                kun = hafta_kunlari.get(now.strftime("%A"), "")
+
+                await client(functions.account.UpdateProfileRequest(
+                    first_name=ismingiz,
+                    last_name=f"| {joriy_daqiqa} 🕒",
+                    about=f"🕒 Vaqt: {joriy_daqiqa} | 📅 {sana} | {kun} | 🟢"
+                ))
+                oxirgi_daqiqa = joriy_daqiqa
+                logging.info(f"Profil yangilandi: {joriy_daqiqa}")
+            
+            await asyncio.sleep(15)  # Daqiqa almashishini tekshirish oralig'i
+        except Exception as e:
+            logging.error(f"Profil yangilashda xatolik: {e}")
+            await asyncio.sleep(30)
 
 async def main():
     print("🚀 Bot ishga tushmoqda...")
@@ -44,31 +82,11 @@ async def main():
     # Render o'chib qolmasligi uchun Flaskni ishga tushiramiz
     Thread(target=run_flask).start()
 
-    while True:
-        try:
-            uzb_iz = pytz.timezone('Asia/Tashkent')
-            now = datetime.now(uzb_iz)
-            
-            # Ma'lumotlarni olish
-            vaqt = now.strftime("%H:%M")
-            sana = now.strftime("%d.%m.%Y")
-            kun = hafta_kunlari.get(now.strftime("%A"), "")
-            
-            # Onlayn holatni yangilash
-            await client(functions.account.UpdateStatusRequest(offline=False))
-            
-            # Profilni yangilash (Ismda ham, Bioda ham vaqt bo'ladi)
-            await client(functions.account.UpdateProfileRequest(
-                first_name=ismingiz,
-                last_name=f"| {vaqt} 🕒",
-                about=f"🕒 Vaqt: {vaqt} | 📅 {sana} | {kun} | 🟢"
-            ))
-            
-            await asyncio.sleep(10)
-            
-        except Exception as e:
-            logging.error(f"Xatolik yuz berdi: {e}")
-            await asyncio.sleep(20)
+    # Ikkala vazifani ham parallel ravishda fonda ishga tushiramiz
+    await asyncio.gather(
+        keep_online(),
+        update_profile_loop()
+    )
 
 if __name__ == '__main__':
     try:
