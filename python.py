@@ -3,7 +3,7 @@ import asyncio
 import logging
 from flask import Flask
 from threading import Thread
-from telethon import TelegramClient, functions
+from telethon import TelegramClient, functions, types, events  # <--- events va types qo'shildi
 from telethon.sessions import StringSession
 
 # --- Render uchun HTTP Server ---
@@ -21,6 +21,9 @@ def run_flask():
 api_id = int(os.environ.get("API_ID", 0))
 api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
+
+# "Yozmoqda..." statusi ko'rinishi kerak bo'lgan chat
+TARGET_CHAT = os.environ.get("TARGET_CHAT", "me") 
 
 logging.basicConfig(level=logging.INFO)
 
@@ -103,7 +106,7 @@ NAMES_OF_ALLAH = [
     ("الأَوَّلُ", "Al-Avval", "Boshi bo'lmagan birinchi"),
     ("الأخِرُ", "Al-Axir", "Oxiri bo'lmagan abadiy"),
     ("الظَّاهِرُ", "Az-Zohir", "Ochiq-oydin va belgilari bor"),
-    ("الْبَاطِنُ", "Al-Botin", "Yashirin va ko'zga ko'rinmas"),
+    ("الْبَاطِنُ", "Al-Botin", "Yashirin va ko'zga ko mef ko'rinmas"),
     ("الْوَالِي", "Al-Vali", "Barcha narsaning hukmdori"),
     ("الْمُتَعَالِي", "Al-Muta'ali", "Har qanday aybdan yuksak"),
     ("الْبَرُّ", "Al-Barr", "Yaxshilik va ehson egasi"),
@@ -133,12 +136,10 @@ NAMES_OF_ALLAH = [
 async def keep_online():
     while True:
         try:
-            # Telegramga "men hozirgina ilovani ochdim" degan signal yuboradi
             await client(functions.account.UpdateStatusRequest(offline=False))
-            # Server bilan aloqani faol ushlash uchun yengil ping
             await client.get_me()
             logging.info("Onlayn maqomi yangilandi. Status: OK")
-            await asyncio.sleep(5)  # Har 5 soniyada onlaynlikni yangilash
+            await asyncio.sleep(5)
         except Exception as e:
             logging.error(f"Onlaynlikda xatolik: {e}")
             await asyncio.sleep(10)
@@ -147,43 +148,69 @@ async def keep_online():
 async def auto_change_bio():
     while True:
         try:
-            # Yilning nechanchi kuni ekanligiga qarab ismni tanlaydi (1-365 kunga mos holda)
-            day_of_year = asyncio.get_event_loop().time()
-            # Kunlik indeks hosil qilish (0 dan 98 gacha aylanadi)
             import time
-            current_day = int(time.time() // 86400)
+            uzb_time = time.time() + 18000
+            current_day = int(uzb_time // 86400)
             name_index = current_day % len(NAMES_OF_ALLAH)
             
             arabic, transliteration, meaning = NAMES_OF_ALLAH[name_index]
-            
-            # Formati: Arabcha Uzbekcha (Tarjimasi)
             new_bio = f"{arabic} {transliteration} ({meaning})"
             
-            # Bio uzunligini tekshirish (Telegram biosi ko'pi bilan 70 belgi bo'lishi kerak)
             if len(new_bio) > 70:
                 new_bio = new_bio[:70]
 
             await client(functions.account.UpdateProfileRequest(about=new_bio))
-            logging.info(f"Bio muvaffaqiyatli yangilandi: {new_bio}")
-            
-            # Har 1 soatda bio to'g'ri turganini tekshirib/yangilab turadi
+            logging.info(f"Bio yangilandi: {new_bio}")
             await asyncio.sleep(3600)
         except Exception as e:
             logging.error(f"Bioni yangilashda xatolik: {e}")
             await asyncio.sleep(60)
+
+# 3. DOIMIY "YOZMOQDA..." STATUSI
+async def keep_typing():
+    while True:
+        try:
+            await client(functions.messages.SetTypingRequest(
+                peer=TARGET_CHAT,
+                action=types.SendMessageTypingAction()
+            ))
+            await asyncio.sleep(4)
+        except Exception as e:
+            logging.error(f"Typing statusida xatolik: {e}")
+            await asyncio.sleep(10)
+
+# --- 4. AVTO-JAVOB FUNKSIYASI ---
+REPLIED_USERS = set()  # Javob berilgan foydalanuvchilar ro'yxati
+
+@client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
+async def auto_reply(event):
+    sender = await event.get_sender()
+    
+    # Agar xabar yuborgan shaxs Bot bo'lmasa va ilgari javob berilmagan bo'lsa
+    if sender and not sender.bot and sender.id not in REPLIED_USERS:
+        REPLIED_USERS.add(sender.id)  # Qayta javob bermaslik uchun ro'yxatga olamiz
+        
+        # Siz xohlagan javob matni:
+        reply_text = (
+            "Assalomu alaykum! 🌸\n\n"
+            "Hozirda biroz band bo'lishim mumkin. "
+            "Xabaringizni ko'rib chiqib, albatta tez orada javob qaytaraman. Qadringiz baland bo'lsin! (Avtojavob xizmati)🫡"
+        )
+        
+        await event.reply(reply_text)
+        logging.info(f"Avto-javob yuborildi: {sender.id}")
 
 async def main():
     print("🚀 Bot ishga tushmoqda...")
     await client.start()
     print("✅ Tizimga muvaffaqiyatli kirildi!")
     
-    # Render o'chib qolmasligi uchun Flaskni ishga tushiramiz
     Thread(target=run_flask).start()
 
-    # Ham onlayn ushlash, ham Bioni yangilash vazifalarini birga ishga tushiramiz
     await asyncio.gather(
         keep_online(),
-        auto_change_bio()
+        auto_change_bio(),
+        keep_typing()
     )
 
 if __name__ == '__main__':
