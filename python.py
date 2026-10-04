@@ -1,9 +1,10 @@
 import os
 import asyncio
 import logging
+import time  # <--- Vaqtni hisoblash uchun qo'shildi
 from flask import Flask
 from threading import Thread
-from telethon import TelegramClient, functions, types, events  # <--- events va types qo'shildi
+from telethon import TelegramClient, functions, types, events
 from telethon.sessions import StringSession
 
 # --- Render uchun HTTP Server ---
@@ -128,7 +129,7 @@ NAMES_OF_ALLAH = [
     ("الْبَدِيعُ", "Al-Badi'", "Yo'qdan mislsiz qilib yaratuvchi"),
     ("الْبَاقِي", "Al-Baqi", "Mangu va abadiy bo'lgan"),
     ("الْوَارِثُ", "Al-Varis", "Barcha narsaning chinakam vorisi"),
-    ("الرَّشِيدُ", "Ar-Rashid", "To'g'ri yo'l ko'rsatuvchi Hakam"),
+    ("الرَّشِيدُ", "Ar-Rashid", "To'g mef to'g'ri yo'l ko'rsatuvchi Hakam"),
     ("الصَّبُورُ", "As-Sabur", "Juda sabrli")
 ]
 
@@ -148,7 +149,6 @@ async def keep_online():
 async def auto_change_bio():
     while True:
         try:
-            import time
             uzb_time = time.time() + 18000
             current_day = int(uzb_time // 86400)
             name_index = current_day % len(NAMES_OF_ALLAH)
@@ -179,26 +179,34 @@ async def keep_typing():
             logging.error(f"Typing statusida xatolik: {e}")
             await asyncio.sleep(10)
 
-# --- 4. AVTO-JAVOB FUNKSIYASI ---
-REPLIED_USERS = set()  # Javob berilgan foydalanuvchilar ro'yxati
+# --- 4. AVTO-JAVOB FUNKSIYASI (HAR 15 DAQIQADA ISHLAYDI) ---
+USER_LAST_REPLIED = {}  # Har bir foydalanuvchining oxirgi javob olgan vaqtini saqlaydi
 
 @client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def auto_reply(event):
     sender = await event.get_sender()
     
-    # Agar xabar yuborgan shaxs Bot bo'lmasa va ilgari javob berilmagan bo'lsa
-    if sender and not sender.bot and sender.id not in REPLIED_USERS:
-        REPLIED_USERS.add(sender.id)  # Qayta javob bermaslik uchun ro'yxatga olamiz
+    # Agar xabar yuborgan shaxs Bot bo'lmasa
+    if sender and not sender.bot:
+        user_id = sender.id
+        current_time = time.time()
         
-        # Siz xohlagan javob matni:
-        reply_text = (
-            "Assalomu alaykum! 🌸\n\n"
-            "Hozirda biroz band bo'lishim mumkin. "
-            "Xabaringizni ko'rib chiqib, albatta tez orada javob qaytaraman. Qadringiz baland bo'lsin! (Avtojavob xizmati)🫡"
-        )
+        # 15 daqiqa (15 * 60 soniya = 900 soniya)
+        COOLDOWN = 15 * 60
         
-        await event.reply(reply_text)
-        logging.info(f"Avto-javob yuborildi: {sender.id}")
+        # Foydalanuvchiga hech qachon javob berilmagan bo'lsa
+        # YOKI unga javob berilganiga 15 daqiqadan ko'p vaqt o'tgan bo'lsa:
+        if user_id not in USER_LAST_REPLIED or (current_time - USER_LAST_REPLIED[user_id]) >= COOLDOWN:
+            USER_LAST_REPLIED[user_id] = current_time  # Shu foydalanuvchi uchun vaqtni belgilab qo'yamiz
+            
+            reply_text = (
+                "Assalomu alaykum! 🌸\n\n"
+                "Hozirda biroz band bo'lishim mumkin. "
+                "Xabaringizni ko'rib chiqib, albatta tez orada javob qaytaraman. Qadringiz baland bo'lsin! (Avtojavob xizmati)🫡"
+            )
+            
+            await event.reply(reply_text)
+            logging.info(f"Avto-javob yuborildi (User ID: {user_id})")
 
 async def main():
     print("🚀 Bot ishga tushmoqda...")
