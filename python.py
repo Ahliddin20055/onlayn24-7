@@ -33,6 +33,17 @@ AUTO_REPLY_TEXT = "Xabaringizni qabul qildim ✅️ @Ahliddin_Safarov sizga tez 
 user_last_replied = {}
 COOLDOWN_MINUTES = 5  # Har necha daqiqada qayta javob berishi (daqiqalarda)
 
+# Hafta kunlari lug'ati (O'zbek tilida)
+WEEKDAYS = {
+    0: "Dushanba",
+    1: "Seshanba",
+    2: "Chorshanba",
+    3: "Payshanba",
+    4: "Juma",
+    5: "Shanba",
+    6: "Yakshanba"
+}
+
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
     if event.is_private:
@@ -67,6 +78,44 @@ async def keep_online():
             logging.error(f"Onlaynlikda xatolik: {e}")
             await asyncio.sleep(10)
 
+# 2. PROFIL NOMI VA BIO'SINI YANGILASH FUNKSIYASI (SOAT, SANA, HAFTA KUNI)
+async def update_profile_clock():
+    last_minute = None
+    while True:
+        try:
+            # O'zbekiston vaqti (UTC+5)
+            tz = timedelta(hours=5)
+            now = datetime.utcnow() + tz
+            
+            # Har daqiqada bir marta yangilaymiz
+            current_minute = now.minute
+            if current_minute != last_minute:
+                last_minute = current_minute
+
+                time_str = now.strftime("%H:%M")          # Masalan: 14:30
+                date_str = now.strftime("%d.%m.%Y")       # Masalan: 25.10.2026
+                weekday_str = WEEKDAYS[now.weekday()]     # Masalan: Dushanba
+
+                # Profil ismi: Safarov Ahliddin | 14:30
+                new_first_name = "Safarov Ahliddin"
+                new_last_name = f"| {time_str}"
+
+                # Profil biosidagi matn
+                new_bio = f"⏰ Vaqt: {time_str} | 📅 Sana: {date_str} | 🗓 {weekday_str}"
+
+                # Ism va bio'ni update qilish
+                await client(functions.account.UpdateProfileRequest(
+                    first_name=new_first_name,
+                    last_name=new_last_name,
+                    about=new_bio
+                ))
+                logging.info(f"Profil yangilandi: {new_first_name} {new_last_name} — {new_bio}")
+
+            await asyncio.sleep(30)  # Har 30 soniyada vaqtni tekshirib turadi
+        except Exception as e:
+            logging.error(f"Profilni yangilashda xatolik: {e}")
+            await asyncio.sleep(60)
+
 async def main():
     print("🚀 Bot ishga tushmoqda...")
     await client.start()
@@ -76,6 +125,7 @@ async def main():
 
     await asyncio.gather(
         keep_online(),
+        update_profile_clock(),
         client.run_until_disconnected()
     )
 
