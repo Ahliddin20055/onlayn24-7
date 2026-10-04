@@ -101,7 +101,7 @@ async def update_profile_clock():
                 new_last_name = f"| {time_str} ⏰️"
 
                 # Profil biosidagi matn
-                new_bio = f"⏰ Vaqt: {time_str} | 📅 Sana: {date_str} | 🗓 {weekday_str}"
+                new_bio = f"⏰ Vaqt: {time_str} | 📅 Sana: {date_str} | 🗓 {weekday_str} | 🟢"
 
                 # Ism va bio'ni update qilish
                 await client(functions.account.UpdateProfileRequest(
