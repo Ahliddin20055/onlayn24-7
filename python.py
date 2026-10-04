@@ -1,9 +1,10 @@
 import os
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from flask import Flask
 from threading import Thread
-from telethon import TelegramClient, functions
+from telethon import TelegramClient, functions, events
 from telethon.sessions import StringSession
 
 # --- Render uchun HTTP Server ---
@@ -26,16 +27,42 @@ logging.basicConfig(level=logging.INFO)
 
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
 
+AUTO_REPLY_TEXT = "Xabaringizni qabul qildim ✅️ @Ahliddin_Safarov sizga tez orada javob yozadi 📝"
+
+# Foydalanuvchilarning oxirgi javob olgan vaqtini saqlash uchun lug'at
+user_last_replied = {}
+COOLDOWN_MINUTES = 10  # Har necha daqiqada qayta javob berishi (daqiqalarda)
+
+@client.on(events.NewMessage(incoming=True))
+async def auto_reply(event):
+    if event.is_private:
+        sender = await event.get_sender()
+        if sender and not sender.is_self:
+            user_id = sender.id
+            now = datetime.now()
+
+            # Tekshiramiz: foydalanuvchiga avval javob berilganmi va vaqt o'tdimi
+            if user_id in user_last_replied:
+                last_time = user_last_replied[user_id]
+                if now - last_time < timedelta(minutes=COOLDOWN_MINUTES):
+                    # Vaqt hali to'lmadi, qayta javob yuborilmaydi
+                    return
+
+            try:
+                await event.reply(AUTO_REPLY_TEXT)
+                user_last_replied[user_id] = now  # Oxirgi javob vaqtini yangilaymiz
+                logging.info(f"Avto-javob yuborildi: {user_id}")
+            except Exception as e:
+                logging.error(f"Avto-javob yuborishda xatolik: {e}")
+
 # 1. DOIMIY ONLAYN USHLASH FUNKSIYASI
 async def keep_online():
     while True:
         try:
-            # Telegramga "men hozirgina ilovani ochdim" degan signal yuboradi
             await client(functions.account.UpdateStatusRequest(offline=False))
-            # Server bilan aloqani faol ushlash uchun yengil ping
             await client.get_me()
             logging.info("Onlayn maqomi yangilandi. Status: OK")
-            await asyncio.sleep(5)  # Har 5 soniyada onlaynlikni yangilash
+            await asyncio.sleep(5)
         except Exception as e:
             logging.error(f"Onlaynlikda xatolik: {e}")
             await asyncio.sleep(10)
@@ -45,11 +72,12 @@ async def main():
     await client.start()
     print("✅ Tizimga muvaffaqiyatli kirildi!")
     
-    # Render o'chib qolmasligi uchun Flaskni ishga tushiramiz
     Thread(target=run_flask).start()
 
-    # Faqat onlayn ushlash vazifasini ishga tushiramiz
-    await keep_online()
+    await asyncio.gather(
+        keep_online(),
+        client.run_until_disconnected()
+    )
 
 if __name__ == '__main__':
     try:
