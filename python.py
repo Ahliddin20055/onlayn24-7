@@ -98,7 +98,7 @@ async def update_profile_clock():
 
                 # Profil ismi: Safarov Ahliddin | 14:30
                 new_first_name = "Safarov Ahliddin"
-                new_last_name = f"| {time_str}"
+                new_last_name = f"| {time_str} ⏰️"
 
                 # Profil biosidagi matn
                 new_bio = f"⏰ Vaqt: {time_str} | 📅 Sana: {date_str} | 🗓 {weekday_str}"
