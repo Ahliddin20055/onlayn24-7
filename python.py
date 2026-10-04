@@ -31,7 +31,7 @@ AUTO_REPLY_TEXT = "Xabaringizni qabul qildim ✅️ @Ahliddin_Safarov sizga tez 
 
 # Foydalanuvchilarning oxirgi javob olgan vaqtini saqlash uchun lug'at
 user_last_replied = {}
-COOLDOWN_MINUTES = 10  # Har necha daqiqada qayta javob berishi (daqiqalarda)
+COOLDOWN_MINUTES = 5  # Har necha daqiqada qayta javob berishi (daqiqalarda)
 
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
