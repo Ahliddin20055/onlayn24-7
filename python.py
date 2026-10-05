@@ -27,9 +27,9 @@ logging.basicConfig(level=logging.INFO)
 
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
 
-AUTO_REPLY_TEXT = "Xabaringizni qabul qildim ✅️ @Ahliddin_Safarov sizga tez orada javob yozadi 📝"
+AUTO_REPLY_TEXT = "📩 Xabaringizni qabul qildim ✅️ /n @Ahliddin_Safarov sizga tez orada javob yozadi ⏳📝"
 
-# Foydalanuvchilarning oxirgi javob olgan vaqtini saqlash uchun lug'at
+# Foydalanuvchilarning oxirgi muloqot qilgan vaqtini saqlash uchun lug'at
 user_last_replied = {}
 COOLDOWN_MINUTES = 30  # Har necha daqiqada qayta javob berishi (daqiqalarda)
 
@@ -44,19 +44,30 @@ WEEKDAYS = {
     6: "Yakshanba"
 }
 
+# Siz birovga xabar yozganingizda taymerni 0 dan qayta boshlash
+@client.on(events.NewMessage(outgoing=True))
+async def track_outgoing(event):
+    if event.is_private:
+        chat_id = event.chat_id
+        tz = timedelta(hours=5)
+        now = datetime.utcnow() + tz
+        user_last_replied[chat_id] = now  # Siz yozgan vaqtingizdan boshlab taymer yangilanadi
+
+# Kelgan xabarlarga avto-javob berish
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
     if event.is_private:
         sender = await event.get_sender()
         if sender and not sender.is_self:
             user_id = sender.id
-            now = datetime.now()
+            tz = timedelta(hours=5)
+            now = datetime.utcnow() + tz
 
-            # Tekshiramiz: foydalanuvchiga avval javob berilganmi va vaqt o'tdimi
+            # Tekshiramiz: foydalanuvchiga avval javob berilganmi yoki siz o'zingiz yozganmidingiz
             if user_id in user_last_replied:
                 last_time = user_last_replied[user_id]
                 if now - last_time < timedelta(minutes=COOLDOWN_MINUTES):
-                    # Vaqt hali to'lmadi, qayta javob yuborilmaydi
+                    # Oxirgi yozishishdan berli 30 daqiqa o'tmadi, avto-javob yuborilmaydi
                     return
 
             try:
