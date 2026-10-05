@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.INFO)
 
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
 
-AUTO_REPLY_TEXT = " **📩 Xabaringizni qabul qildim** ✅️\n\n👉🏻 @Ahliddin_Safarov sizga tez orada javob yozadi ⏳📝\n\n🟢**(Avto javob xizmati)**♻️"
+AUTO_REPLY_TEXT = " **📩 Xabaringizni qabul qildim** ✅️\n\n👉🏻 @Ahliddin_Safarov sizga tez orada javob yozadi ⏳ 📝\n\n🟢 **(Avto javob xizmati)** ♻️"
 
 # Foydalanuvchilarning oxirgi muloqot qilgan vaqtini saqlash uchun lug'at
 user_last_replied = {}
