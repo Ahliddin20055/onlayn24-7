@@ -31,7 +31,7 @@ AUTO_REPLY_TEXT = " **📩 Xabaringizni qabul qildim** ✅️\n\n👉🏻 @Ahlid
 
 # Foydalanuvchilarning oxirgi muloqot qilgan vaqtini saqlash uchun lug'at
 user_last_replied = {}
-COOLDOWN_MINUTES = 30  # Har necha daqiqada qayta javob berishi (daqiqalarda)
+COOLDOWN_MINUTES = 60  # Har necha daqiqada qayta javob berishi (daqiqalarda)
 
 # Hafta kunlari lug'ati (O'zbek tilida)
 WEEKDAYS = {
