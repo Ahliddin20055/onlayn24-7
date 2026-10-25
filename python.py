@@ -56,9 +56,11 @@ async def track_outgoing(event):
 # Kelgan xabarlarga avto-javob berish
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
-    if event.is_private:
+    # Faqat shaxsiy chat ekanligini, guruh/kanal emasligini va yuboruvchi bot emasligini qat'iy tekshiramiz
+    if event.is_private and not event.is_group and not event.is_channel:
         sender = await event.get_sender()
-        if sender and not sender.is_self:
+        # Sender mavjud bo'lishi, o'zimiz emasligi va bot emasligi sharti
+        if sender and not sender.is_self and not getattr(sender, 'bot', False):
             user_id = sender.id
             tz = timedelta(hours=5)
             now = datetime.utcnow() + tz
@@ -67,7 +69,7 @@ async def auto_reply(event):
             if user_id in user_last_replied:
                 last_time = user_last_replied[user_id]
                 if now - last_time < timedelta(minutes=COOLDOWN_MINUTES):
-                    # Oxirgi yozishishdan berli 30 daqiqa o'tmadi, avto-javob yuborilmaydi
+                    # Oxirgi yozishishdan berli belgilangan vaqt o'tmadi, avto-javob yuborilmaydi
                     return
 
             try:
@@ -103,7 +105,7 @@ async def update_profile_clock():
             if current_minute != last_minute:
                 last_minute = current_minute
 
-                time_str = now.strftime("%H:%M")          # Masalan: 14:30
+                time_str = now.strftime("%H:%M")         # Masalan: 14:30
                 date_str = now.strftime("%d.%m.%Y")       # Masalan: 25.10.2026
                 weekday_str = WEEKDAYS[now.weekday()]     # Masalan: Dushanba
 
