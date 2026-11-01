@@ -53,31 +53,34 @@ async def track_outgoing(event):
         now = datetime.utcnow() + tz
         user_last_replied[chat_id] = now  # Siz yozgan vaqtingizdan boshlab taymer yangilanadi
 
-# Kelgan xabarlarga avto-javob berish
 @client.on(events.NewMessage(incoming=True))
 async def auto_reply(event):
-    # Faqat shaxsiy chat ekanligini, guruh/kanal emasligini va yuboruvchi bot emasligini qat'iy tekshiramiz
-    if event.is_private and not event.is_group and not event.is_channel:
+    if not event.is_private:
+        return
+
+    user_id = event.sender_id
+    tz = timedelta(hours=5)
+    now = datetime.utcnow() + tz
+
+    # Tekshiruv va band qilish orasida await yo'q — shuning uchun parallel xabarlar o'tib keta olmaydi
+    last_time = user_last_replied.get(user_id)
+    if last_time and now - last_time < timedelta(minutes=COOLDOWN_MINUTES):
+        return
+
+    # Avval vaqtni yozamiz (band qilamiz), keyin yuboramiz
+    user_last_replied[user_id] = now
+
+    try:
         sender = await event.get_sender()
-        # Sender mavjud bo'lishi, o'zimiz emasligi va bot emasligi sharti
-        if sender and not sender.is_self and not getattr(sender, 'bot', False):
-            user_id = sender.id
-            tz = timedelta(hours=5)
-            now = datetime.utcnow() + tz
+        if not sender or getattr(sender, 'bot', False) or getattr(sender, 'is_self', False):
+            user_last_replied.pop(user_id, None)
+            return
 
-            # Tekshiramiz: foydalanuvchiga avval javob berilganmi yoki siz o'zingiz yozganmidingiz
-            if user_id in user_last_replied:
-                last_time = user_last_replied[user_id]
-                if now - last_time < timedelta(minutes=COOLDOWN_MINUTES):
-                    # Oxirgi yozishishdan berli belgilangan vaqt o'tmadi, avto-javob yuborilmaydi
-                    return
-
-            try:
-                await event.reply(AUTO_REPLY_TEXT)
-                user_last_replied[user_id] = now  # Oxirgi javob vaqtini yangilaymiz
-                logging.info(f"Avto-javob yuborildi: {user_id}")
-            except Exception as e:
-                logging.error(f"Avto-javob yuborishda xatolik: {e}")
+        await event.reply(AUTO_REPLY_TEXT)
+        logging.info(f"Avto-javob yuborildi: {user_id}")
+    except Exception as e:
+        user_last_replied.pop(user_id, None)  # xato bo'lsa, keyingi safar qayta urinadi
+        logging.error(f"Avto-javob yuborishda xatolik: {e}")
 
 # 1. DOIMIY ONLAYN USHLASH FUNKSIYASI
 async def keep_online():
