@@ -1,6 +1,8 @@
 import os
+import json
 import asyncio
 import logging
+import urllib.request
 from datetime import datetime, timedelta
 from flask import Flask
 from threading import Thread
@@ -23,6 +25,12 @@ api_id = int(os.environ.get("API_ID", 0))
 api_hash = os.environ.get("API_HASH", "")
 string_session = os.environ.get("STRING_SESSION", "")
 
+# --- OB-HAVO SOZLAMALARI (Render Environment'da o'zgartirsa bo'ladi) ---
+LAT = os.environ.get("LAT", "41.2995")      # Toshkent
+LON = os.environ.get("LON", "69.2401")
+BIO_LIMIT = int(os.environ.get("BIO_LIMIT", "70"))  # Premium bo'lsa 140 qiling
+WEATHER_REFRESH_SECONDS = 600               # 10 daqiqada bir yangilanadi
+
 logging.basicConfig(level=logging.INFO)
 
 client = TelegramClient(StringSession(string_session), api_id, api_hash)
@@ -43,6 +51,76 @@ WEEKDAYS = {
     5: "Shanba",
     6: "Yakshanba"
 }
+
+# --- OB-HAVO FUNKSIYALARI ---
+weather_cache = {"emoji": "", "temp": "", "updated": None}
+
+def weather_icon(code, is_day):
+    if code == 0:
+        return "☀️" if is_day else "🌙"
+    if code in (1, 2):
+        return "🌤" if is_day else "☁️"
+    if code == 3:
+        return "☁️"
+    if code in (45, 48):
+        return "🌫"
+    if code in (51, 53, 55, 56, 57, 80, 81, 82):
+        return "🌦"
+    if code in (61, 63, 65, 66, 67):
+        return "🌧"
+    if code in (71, 73, 75, 77, 85, 86):
+        return "❄️"
+    if code in (95, 96, 99):
+        return "⛈"
+    return "🌡"
+
+def fetch_weather_sync():
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}"
+        "&current=temperature_2m,weather_code,is_day&timezone=auto"
+    )
+    with urllib.request.urlopen(url, timeout=10) as r:
+        data = json.loads(r.read().decode())
+    cur = data["current"]
+    return cur["temperature_2m"], cur["weather_code"], cur["is_day"]
+
+async def get_weather(now):
+    """Keshdan oladi, eskirgan bo'lsa yangilaydi. Xato bo'lsa eski qiymatni qaytaradi."""
+    updated = weather_cache["updated"]
+    if updated is None or (now - updated).total_seconds() >= WEATHER_REFRESH_SECONDS:
+        try:
+            temp, code, is_day = await asyncio.to_thread(fetch_weather_sync)
+            t = round(temp)
+            weather_cache["temp"] = f"{t:+d}°C" if t != 0 else "0°C"
+            weather_cache["emoji"] = weather_icon(code, is_day)
+            weather_cache["updated"] = now
+            logging.info(f"Ob-havo yangilandi: {weather_cache['emoji']} {weather_cache['temp']}")
+        except Exception as e:
+            logging.error(f"Ob-havoni olishda xatolik: {e}")
+            # Xato bo'lsa 1 daqiqadan keyin qayta urinadi
+            weather_cache["updated"] = now - timedelta(seconds=WEATHER_REFRESH_SECONDS - 60)
+    return weather_cache["emoji"], weather_cache["temp"]
+
+def build_bio(time_str, date_str, weekday_str, w_emoji, w_temp):
+    """Bio uzunlik limitiga sig'adigan eng chiroyli variantni tanlaydi."""
+    w = f"{w_emoji} {w_temp}" if w_temp else ""
+    variants = []
+    if w:
+        variants += [
+            f"🇺🇿⏰ Vaqt: {time_str} | 📅 Sana: {date_str} | 🗓 {weekday_str} | {w} | 🟢",
+            f"🇺🇿⏰ {time_str} | 📅 {date_str} | 🗓 {weekday_str} | {w} | 🟢",
+            f"⏰ {time_str} | 📅 {date_str} | 🗓 {weekday_str[:3]} | {w}",
+            f"⏰ {time_str} | 📅 {date_str} | {w}",
+            f"⏰ {time_str} | {w}",
+        ]
+    variants += [
+        f"🇺🇿⏰ Vaqt: {time_str} | 📅 Sana: {date_str} | 🗓 {weekday_str} | 🟢",
+        f"⏰ {time_str} | 📅 {date_str}",
+    ]
+    for v in variants:
+        if len(v) <= BIO_LIMIT:
+            return v
+    return variants[-1][:BIO_LIMIT]
 
 # Siz birovga xabar yozganingizda taymerni 0 dan qayta boshlash
 @client.on(events.NewMessage(outgoing=True))
@@ -94,7 +172,7 @@ async def keep_online():
             logging.error(f"Onlaynlikda xatolik: {e}")
             await asyncio.sleep(10)
 
-# 2. PROFIL NOMI VA BIO'SINI YANGILASH FUNKSIYASI (SOAT, SANA, HAFTA KUNI)
+# 2. PROFIL NOMI VA BIO'SINI YANGILASH FUNKSIYASI (SOAT, SANA, HAFTA KUNI, OB-HAVO)
 async def update_profile_clock():
     last_minute = None
     while True:
@@ -116,8 +194,11 @@ async def update_profile_clock():
                 new_first_name = "Safarov Ahliddin"
                 new_last_name = f"| {time_str} 🇺🇿⌚️"
 
-                # Profil biosidagi matn
-                new_bio = f"🇺🇿⏰ Vaqt: {time_str} | 📅 Sana: {date_str} | 🗓 {weekday_str} | 🟢"
+                # Ob-havo (keshdan yoki yangilab)
+                w_emoji, w_temp = await get_weather(now)
+
+                # Profil biosidagi matn (ob-havo bilan)
+                new_bio = build_bio(time_str, date_str, weekday_str, w_emoji, w_temp)
 
                 # Ism va bio'ni update qilish
                 await client(functions.account.UpdateProfileRequest(
